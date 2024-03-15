@@ -414,61 +414,25 @@ Without using `concat`, lists are saved as-is.
 == Actions
 
 The actions kanata provides are what make it truly customizable.
-This section explains the available actions.
 
-[[live-reload]]
-=== Live reload
-<<table-of-contents,Back to ToC>>
+Actions are basically types of functionalities that can be assigned to keys 
+to produce specific sequences and/or combination of keypresses that will be sent back to system.
+In other words, actions allow remapping your keyboard in a specific way.
 
-You can put the `+lrld+` action onto a key to live reload your configuration file.
-If kanata can't parse the file,
-the previous configuration will continue to be used.
-When live reload is activated,
-the active kanata layer will be the first `deflayer` defined in the configuration.
+There are currently more than 30 different types of actions available in kanata.
+Moreover, many actions have multiple variants, which gives even more possibilities.
 
-NOTE: live reload does not read or apply changes to device-related configurations,
-such as `linux-dev`, `macos-dev-names-include`,
-or `windows-only-windows-interception-keyboard-hwids`.
+To make it less overwhelming, all available actions have been split into 4 categories: 
+- Essential - Must-know actions, most of them appear in practically all kanata configs.  
+- Extra - Still somewhat basic actions, but less commonly used.
+- Advanced - Actions that are recommended to read about after getting some grasp of kanata. 
+- Mouse - Normally mouse actions would be put in Extra category, but there are so many of them, they deserve their own category.
 
-.Example:
-[source]
-----
-(deflayer has-live-reload
-  lrld a s d f
-)
-----
-
-There are variants of `lrld`: `lrld-prev` and `lrld-next`. These will cycle
-through different configuration files that you specify on kanata's startup.
-The first configuration file specified will be the one loaded on startup.
-The prev/next variants can be used with shortened names of `lrpv` and `lrnx` as
-well.
-
-Another variant is the list action `lrld-num`.
-This reloads the configuration file specified by the number,
-according to the order that the configuration file arguments
-are passed into kanata's startup command.
-
-.Example:
-[source]
-----
-(deflayer has-live-reloads
-  lrld lrpv lrnx (lrld-num 3)
-)
-----
-
-Example specifying multiple config files in the command line:
-
-[source]
-----
-kanata -c startup.cfg -c 2nd.cfg -c 3rd.cfg
-----
-
-Given the above startup command,
-activating `(lrld-num 2)` would reload the `2nd.cfg` file.
+[[essential-actions]]
+=== Essential
 
 [[layer-switch]]
-=== layer-switch
+==== layer-switch
 <<table-of-contents,Back to ToC>>
 
 This action allows you to switch to another "base" layer. This is permanent
@@ -485,7 +449,7 @@ defined in a `deflayer` entry.
 ----
 
 [[layer-while-held]]
-=== layer-while-held
+==== layer-while-held
 <<table-of-contents,Back to ToC>>
 
 This action allows you to temporarily change to another layer while the key
@@ -505,8 +469,168 @@ You may also use `layer-toggle` in place of `layer-while-held`; they behave
 exactly the same. The `layer-toggle` name is slightly shorter but is a bit
 inaccurate with regards to its meaning.
 
+
+[[tap-hold]]
+==== tap-hold
+<<table-of-contents,Back to ToC>>
+
+WARNING: The `tap-hold` action and all variants can behave unexpectedly on Linux
+with respect to repeat of antecedent key presses.
+The full context is in https://github.com/jtroo/kanata/discussions/422[discussion #422].
+In brief, the workaround is to use `tap-hold` inside of <<multi,multi>>,
+combined with another key action that behaves as a no-op like `f24`. +
+Example: `(multi f24 (tap-hold ...))`
+
+The `+tap-hold+` action allows you to have one action/key for a "tap" and a
+different action/key for a "hold". A tap is a rapid press then release of the
+key whereas a hold is a long press.
+
+The action takes 4 parameters in the listed order:
+
+. tap timeout (unit: ms)
+. hold timeout (unit: ms)
+. tap action
+. hold action
+
+The tap timeout is the number of milliseconds within which a rapid
+press+release+press of a key will result in the tap action being held instead
+of the hold action activating.
+
+.Tap timeout in more detail
+[%collapsible,indent=4]
+=====
+The way a `tap-hold` action works with respect to the tap timeout
+is often unclear to newcomers.
+To make it concrete, the output event sequence of the `tap-hold` action
+`(tap-hold $tap-timeout 200 a lctl)`
+for varying values of `$tap-timeout`
+with a fixed input event sequence will be described.
+
+The input event sequence is:
+
+- press
+- 50 ms elapses
+- release
+- 50 ms elapses
+- press
+- 300 ms elapses
+- release
+
+With `(defvar $tap-timeout 0)`, the output event sequence is:
+
+- 50 ms elapses
+- press `a`
+- release `a`
+- 250 ms elapses
+- press `lctl`
+- 100 ms elapses
+- release `lctl`
+
+The above output sequence is the same for all `$tap-timeout` values
+between and including `0` and `99`.
+
+For a value of `100` or greater for `$tap-timeout`,
+the output event sequence is instead:
+
+- 50 ms elapses
+- press `a`
+- release `a`
+- 50 ms elapses
+- press `a`
+- 300 ms elapses
+- release `a`
+=====
+
+The hold timeout is the number of milliseconds after which the hold action will
+activate.
+
+There are two additional variants of `+tap-hold+`:
+
+* `+tap-hold-press+`
+** If there is a press of a different key, the hold action is activated even if
+the hold timeout hasn't expired yet
+* `+tap-hold-release+`
+** If there is a press+release of a different key, the hold action is activated
+even if the hold timeout hasn't expired yet
+
+These variants may be useful if you want more responsive tap-hold keys,
+but you should be wary of activating the hold action unintentionally.
+
+.Example:
+[source]
+----
+(defalias
+  anm (tap-hold         200 200 a @num) ;; tap: a      hold: numbers layer
+  oar (tap-hold-press   200 200 o @arr) ;; tap: o      hold: arrows layer
+  ech (tap-hold-release 200 200 e @chr) ;; tap: e      hold: chords layer
+)
+----
+
+There are further additional variants of `tap-hold-press` and `tap-hold-release`:
+
+- `tap-hold-press-timeout`
+- `tap-hold-release-timeout`
+
+These variants take a 5th parameter, in addition to the same 4 as the other
+variants. The 5th parameter is another action, which will activate if the hold
+timeout expires as opposed to being triggered by other key actions, whereas the
+non `-timeout` variants will activate the hold action in both cases.
+
+- `tap-hold-release-keys`
+
+This variant takes a 5th parameter which is a list of keys
+that trigger an early tap
+when they are pressed while the `tap-hold-release-keys` action is waiting.
+Otherwise this behaves as `tap-hold-release`.
+
+The keys in the 5th parameter correspond to the physical input keys,
+or in other words the key that corresponds to `defsrc`.
+This is in contrast to the `fork` and `switch` actions
+which operates on outputted keys, or in other words the outputs
+that are in `deflayer`, `defalias`, etc. for the corresponding `defsrc` key.
+
+.Example:
+[source]
+----
+(defalias
+  ;; tap: o    hold: arrows layer    timeout: backspace
+  oat (tap-hold-press-timeout   200 200 o @arr bspc)
+  ;; tap: e    hold: chords layer    timeout: esc
+  ect (tap-hold-release-timeout 200 200 e @chr esc)
+  ;; tap: u    hold: misc layer      early tap if any of: (a o e) are pressed
+  umk (tap-hold-release-keys 200 200 u @msc (a o e))
+)
+----
+
+- `tap-hold-except-keys`
+
+This variant takes a 5th parameter which is a list of keys
+that always trigger a tap
+when they are pressed while the `tap-hold-except-keys` action is waiting.
+No key is ever output until there is either a release of the key or any other
+key is pressed. This differs from `tap-hold` behaviour.
+
+The keys in the 5th parameter correspond to the physical input keys,
+or in other words the key that corresponds to `defsrc`.
+This is in contrast to the `fork` and `switch` actions
+which operates on outputted keys, or in other words the outputs
+that are in `deflayer`, `defalias`, etc. for the corresponding `defsrc` key.
+
+.Example:
+[source]
+----
+(defalias
+  ;; tap: o    hold: arrows layer    timeout: backspace
+  oat (tap-hold-press-timeout   200 200 o @arr bspc)
+  ;; tap: e    hold: chords layer    timeout: esc
+  ect (tap-hold-release-timeout 200 200 e @chr esc)
+  ;; tap: u    hold: misc layer      always tap if any of: (a o e) are pressed
+  umk (tap-hold-except-keys 200 200 u @msc (a o e))
+)
+----
+
 [[transparent-key]]
-=== Transparent key
+==== Transparent key
 <<table-of-contents,Back to ToC>>
 
 If you use a single underscore for a key `+_+` then it acts as a "transparent"
@@ -527,51 +651,8 @@ while-held layer, the base layer's behaviour will activate.
 )
 ----
 
-[[no-op]]
-=== No-op
-<<table-of-contents,Back to ToC>>
-
-You may use the action `+XX+` as a "no operation" key, meaning pressing the key
-will do nothing. This might be desirable in place of a transparent key on a
-layer that is not fully mapped so that a key that is intentionally not mapped
-will do nothing as opposed to typing a letter.
-
-.Example:
-[source]
-----
-(deflayer contains-no-op
-  XX a s d f
-)
-----
-
-[[unicode]]
-=== Unicode
-<<table-of-contents,Back to ToC>>
-
-The `+unicode+` action accepts a single unicode character. The character will
-not be repeatedly typed if you hold the key down.
-
-You may use a unicode character as an alias if desired.
-
-NOTE: The unicode action may not be correctly accepted by the active
-application.
-
-NOTE: If using Linux, make sure to look at the
-<<linux-only-linux-unicode-u-code,unicode behaviour customization>> in defcfg.
-
-[source]
-----
-(defalias
-  sml (unicode 😀)
-  🙁 (unicode 🙁)
-)
-(deflayer has-happy-sad
-  @sml @🙁 a s d f
-)
-----
-
 [[output-chordscombos]]
-=== Output chords/combos
+==== Output chords/combos
 <<table-of-contents,Back to ToC>>
 
 You may want to remap a key to automatically be pressed in combination with
@@ -600,71 +681,12 @@ Output chords are typically used do one-off actions such as:
 - type a special/accented character, e.g. `RA-a`
 - do a special action like `C-c` to send `SIGTERM` in the terminal
 
-.Example:
-[source]
-----
-(defalias
-  ;; Type exclamation mark (US layout)
-  ex! S-1
-  ;; Ctrl+C: send SIGINT to a Linux terminal program
-  int C-c
-  ;; Win+Tab: open Windows' Task View
-  tsk M-tab
-  ;; Ctrl+Shift+(C|V): copy or paste from certain terminal programs
-  cpy C-S-c
-  pst C-S-v
-)
-----
 
-[[repeat-key]]
-=== Repeat key
-<<table-of-contents,Back to ToC>>
-
-The action `+rpt+` repeats the most recently typed key. Holding down this key
-will not repeatedly send the key. The intended use case is to be able to use a
-different finger or even thumb key to repeat a typed key, as opposed to
-double-tapping a key.
-
-.Example:
-[source]
-----
-(deflayer has-repeat
-  rpt a s d f
-)
-----
-
-The `rpt` action only repeats the last key output.
-For example, it won't output a chord like `ctrl+c`
-if the previous key pressed was `C-c`.
-The `rpt` action will only output `c` in this case.
-
-There is a variant `rpt-any`
-which will repeat any previous action
-and would output `ctrl+c` in the example case.
-
-----
-(deflayer has-repeat-any
-  rpt-any a s d f
-)
-----
-
-[[release-a-key-or-layer]]
-=== Release a key or layer
-<<table-of-contents,Back to ToC>>
-
-You can release a held key or layer via these actions:
-
-* `release-key`: release a key, accepts `defsrc` compatible names
-* `release-layer`: release a while-held layer
-
-An example practical use case for `release-key` is seen in the `multi` section
-directly below.
-
-There is currently no known practical use case for
-`release-layer`, but it exists nonetheless.
+[[extra-actions]]
+=== Extra
 
 [[multi]]
-=== multi
+==== multi
 <<table-of-contents,Back to ToC>>
 
 The `+multi+` action executes multiple keys or actions in order but also
@@ -716,8 +738,1026 @@ and that would work as intended.
 It is recommended to avoid `multi` if it can be replaced
 with a different action like `macro` or an output chord.
 
+
+[[macro]]
+==== macro
+<<table-of-contents,Back to ToC>>
+
+The `+macro+` action will tap a sequence of keys with optional
+delays. This is different from `+multi+` because in the `+multi+` action,
+all keys are held, whereas in `+macro+`, keys are pressed then released.
+
+This means that with `+macro+` you can have some letters capitalized and others
+not. This is not possible with `+multi+`.
+
+The `+macro+` action accepts one or more keys, some actions, chords, and delays
+(unit: ms).  It also accepts a list prefixed with <<output-chordscombos,output chord>>
+modifiers where the list is subject to the aforementioned restrictions. The
+number keys will be parsed as delays, so they must be aliased to be used in a macro.
+
+Up to 4 macros can be active at the same time.
+
+The actions supported in `+macro+` are:
+
+* <<cmd, cmd>>
+* <<unicode, unicode>>
+* <<mouse-actions,mouse actions>>
+* <<repeat-key,repeat>>
+* <<live-reload,live reload>>
+* <<fake-keys,fake keys>>
+* <<sequences,sequence leader>>
+* <<arbitrary-code,arbitrary keycode>>
+* <<dynamic-macro,dynamic macro>>
+* <<unmod,unmod>>
+
+NOTE: Some of these actions may need short delays between.
+For example, `(macro a (unmod b) 5 (unmod c) d)`
+needs the delay of `5` to work correctly.
+
+.Example:
+[source]
+----
+(defalias
+  : S-;
+  8 8
+  0 0
+  🙃 (unicode 🙃)
+
+  ;; Type "http://localhost:8080"
+  lch (macro h t t p @: / / 100 l o c a l h o s t @: @8 @0 @8 @0)
+
+  ;; Type "I am HAPPY my FrIeNd 🙃"
+  hpy (macro S-i spc a m spc S-(h a p p y) spc m y S-f r S-i e S-n d spc @🙃)
+
+  ;; alt-tab(x3) and alt-shift-tab(x3) with macro
+  tfd (macro A-(tab 200 tab 200 tab))
+  tbk (macro A-S-(tab 200 tab 200 tab))
+)
+----
+
+There is a variant of the `+macro+` action that will cancel all active macros
+upon releasing the key: `+macro-release-cancel+`. It is parsed identically to
+the non-cancelling version. An example use case for this action is holding down
+a key to get different outputs, similar to tap-dance but one can see which keys
+are being outputted.
+
+E.g. in the example below, when holding the key, first `1` is typed, then
+replaced by `!` after 500ms, and finally that is replaced by `@` after another
+500ms. However, if the key is released, the last character typed will remain
+and the rest of the macro does not run.
+
+[source]
+----
+(defalias
+  1 1
+
+  ;; macro-release-cancel to output different characters with visual feedback
+  ;; after holding for different amounts of time.
+  1!@ (macro-release-cancel @1 500 bspc S-1 500 bspc S-2)
+)
+----
+
+There are further variants of the two `macro` actions which repeat while held.
+The repeat will only occur once all macros have completed,
+including the held macro key.
+If multiple repeating macros are being held simulaneously,
+only the most recently pressed macro will be repeated.
+
+[source]
+----
+(defalias
+  mr1 (macro-repeat mltp)
+  mr2 (macro-repeat-release-cancel mltp)
+)
+----
+
+[[tap-dance]]
+==== tap-dance
+<<table-of-contents,Back to ToC>>
+
+The `+tap-dance+` action allows repeated tapping of a key to result in
+different actions. It is followed by a timeout (unit: ms) and a list
+of keys or actions. Each time the key is pressed, its timeout will reset. The
+action will be chosen if one of the following events occur:
+
+* the timeout expires
+* a different key is pressed
+* the key is repeated up to the final action
+
+You may put normal keys or other actions in `+tap-dance+`.
+
+.Example:
+[source]
+----
+(defalias
+  ;; 1 tap : "A" key
+  ;; 2 taps: Control+C
+  ;; 3 taps: Switch to another layer
+  ;; 4 taps: Escape key
+  td (tap-dance 200 (a C-c (layer-switch l2) esc))
+)
+----
+
+There is a variant of `tap-dance` with the name `tap-dance-eager`. The variant
+is parsed identically but the difference is that it will activate every
+action in the sequence as the taps progress.
+
+In the example below, repeated taps will, in order:
+
+1. type `a`
+2. erase the `a` and type `bb`
+3. erase the `bb` and type `ccc`
+
+[source]
+----
+(defalias
+  td2 (tap-dance-eager 500 (
+    (macro a) ;; use macro to prevent auto-repeat of the key
+    (macro bspc b b)
+    (macro bspc bspc c c c)
+  ))
+)
+----
+
+
+[[one-shot]]
+==== one-shot
+<<table-of-contents,Back to ToC>>
+
+The `+one-shot+` action is similar to "sticky keys", if you know what that is.
+This activates an action or key until either the timeout expires or a different
+key is used. The `+one-shot+` action must be followed by a timeout (unit:
+ms) and another key or action.
+
+Some of the intended use cases are:
+
+* press a modifier for exactly one following key press
+* switch to another layer for exactly one following key press
+
+If a `+one-shot+` key is held then it will act as the regular key. E.g. holding
+a key assigned with `+@os1+` in the example below will keep Left Shift held for
+every key, not just one, as long as it's still physically pressed.
+
+Pressing multiple `+one-shot+` keys in a row within the timeout will combine
+the actions of those keys and reset the timeout to the value of the most
+recently pressed `+one-shot+` key.
+
+There are four variants of the `+one-shot+` action:
+
+- `+one-shot-press+`:
+  end on the first press of another key
+- `+one-shot-release+`:
+  end on the first release of another key
+- `+one-shot-press-pcancel+`:
+  end on the first press of another key
+  or on re-press of another active one-shot key
+- `+one-shot-release-pcancel+`:
+  end on the first release of another key
+  or on re-press of another active one-shot key
+
+It is important to note that the first activation of a one-shot key
+determines the behaviour with regards to the 4 variants
+for all subsequent one-shot key activations,
+even if a following one-shot key has a different configuration
+than the initial key pressed.
+
+The default name `+one-shot+` corresponds to `+one-shot-press+`.
+
+.Example:
+[source]
+----
+(defalias
+  os1 (one-shot 500 (layer-while-held another-layer))
+  os2 (one-shot-press 2000 lsft)
+  os3 (one-shot-release 2000 lctl)
+  os4 (one-shot-press-pcancel 2000 lalt)
+  os5 (one-shot-release-pcancel 2000 lmet)
+)
+----
+
+[[unicode]]
+==== unicode
+<<table-of-contents,Back to ToC>>
+
+The `+unicode+` action accepts a single unicode character. The character will
+not be repeatedly typed if you hold the key down.
+
+You may use a unicode character as an alias if desired.
+
+NOTE: The unicode action may not be correctly accepted by the active
+application.
+
+NOTE: If using Linux, make sure to look at the
+<<linux-only-linux-unicode-u-code,unicode behaviour customization>> in defcfg.
+
+[source]
+----
+(defalias
+  sml (unicode 😀)
+  🙁 (unicode 🙁)
+)
+(deflayer has-happy-sad
+  @sml @🙁 a s d f
+)
+----
+
+.Example:
+[source]
+----
+(defalias
+  ;; Type exclamation mark (US layout)
+  ex! S-1
+  ;; Ctrl+C: send SIGINT to a Linux terminal program
+  int C-c
+  ;; Win+Tab: open Windows' Task View
+  tsk M-tab
+  ;; Ctrl+Shift+(C|V): copy or paste from certain terminal programs
+  cpy C-S-c
+  pst C-S-v
+)
+----
+
+
+[[caps-word]]
+==== caps-word
+<<table-of-contents,Back to ToC>>
+
+The `caps-word` action triggers a state where the `lsft` key
+will be added to the active key list
+when a set of specific keys are active.
+The keys are: `a-z` and `-`, which will be outputted as `A-Z` and `_`
+respectively when using the US layout.
+
+Examples where this is helpful
+is capitalizing a single important word
+like in `IMPORTANT!`
+or defining a constant in code
+like `const P99_99_VALUE: ...`.
+This has an advantage over the regular caps lock
+because it automatically ends
+so it doesn't need to be toggled off manually,
+and it also shifts `-` to `_`
+which caps lock does not do.
+
+The `caps-word` state ends when the keyboard is idle
+for the duration of the defined timeout (1st parameter),
+or a terminating key is pressed.
+Every key is a terminating key
+except the keys which get capitalized
+and the extra keys in this list:
+
+- `0-9`
+- `kp0-kp9`
+- `bspc del`
+- `up down left rght`
+
+You can use `caps-word-custom` instead of `caps-word`
+if you want to manually define which keys are capitalized (2nd parameter)
+and what the extra non-terminal+non-capitalized keys should be (3rd parameter).
+
+[source]
+----
+(defalias
+  cw (caps-word 2000)
+
+  ;; This example is similar to the default caps-word behaviour but it moves the
+  ;; 0-9 keys to the capitalized key list from the extra non-terminating key list.
+  cwc (caps-word-custom
+    2000
+    (a b c d e f g h i j k l m n o p q r s t u v w x y z 0 1 2 3 4 5 6 7 8 9)
+    (kp0 kp1 kp2 kp3 kp4 kp5 kp6 kp7 kp8 kp9 bspc del up down left rght)
+  )
+)
+----
+
+[[repeat-key]]
+==== Repeat key
+<<table-of-contents,Back to ToC>>
+
+The action `+rpt+` repeats the most recently typed key. Holding down this key
+will not repeatedly send the key. The intended use case is to be able to use a
+different finger or even thumb key to repeat a typed key, as opposed to
+double-tapping a key.
+
+.Example:
+[source]
+----
+(deflayer has-repeat
+  rpt a s d f
+)
+----
+
+The `rpt` action only repeats the last key output.
+For example, it won't output a chord like `ctrl+c`
+if the previous key pressed was `C-c`.
+The `rpt` action will only output `c` in this case.
+
+There is a variant `rpt-any`
+which will repeat any previous action
+and would output `ctrl+c` in the example case.
+
+----
+(deflayer has-repeat-any
+  rpt-any a s d f
+)
+----
+
+[[no-op]]
+==== No-op
+<<table-of-contents,Back to ToC>>
+
+You may use the action `+XX+` as a "no operation" key, meaning pressing the key
+will do nothing. This might be desirable in place of a transparent key on a
+layer that is not fully mapped so that a key that is intentionally not mapped
+will do nothing as opposed to typing a letter.
+
+.Example:
+[source]
+----
+(deflayer contains-no-op
+  XX a s d f
+)
+----
+
+[[live-reload]]
+==== Live reload
+<<table-of-contents,Back to ToC>>
+
+You can put the `+lrld+` action onto a key to live reload your configuration file.
+If kanata can't parse the file,
+the previous configuration will continue to be used.
+When live reload is activated,
+the active kanata layer will be the first `deflayer` defined in the configuration.
+
+NOTE: live reload does not read or apply changes to device-related configurations,
+such as `linux-dev`, `macos-dev-names-include`,
+or `windows-only-windows-interception-keyboard-hwids`.
+
+.Example:
+[source]
+----
+(deflayer has-live-reload
+  lrld a s d f
+)
+----
+
+There are variants of `lrld`: `lrld-prev` and `lrld-next`. These will cycle
+through different configuration files that you specify on kanata's startup.
+The first configuration file specified will be the one loaded on startup.
+The prev/next variants can be used with shortened names of `lrpv` and `lrnx` as
+well.
+
+Another variant is the list action `lrld-num`.
+This reloads the configuration file specified by the number,
+according to the order that the configuration file arguments
+are passed into kanata's startup command.
+
+.Example:
+[source]
+----
+(deflayer has-live-reloads
+  lrld lrpv lrnx (lrld-num 3)
+)
+----
+
+Example specifying multiple config files in the command line:
+
+[source]
+----
+kanata -c startup.cfg -c 2nd.cfg -c 3rd.cfg
+----
+
+Given the above startup command,
+activating `(lrld-num 2)` would reload the `2nd.cfg` file.
+
+[[advanced-actions]]
+=== Advanced
+
+
+[[input-chords]]
+==== Input chords
+<<table-of-contents,Back to ToC>>
+
+Not to be confused with <<output-chords-combos,output chords>>, `+chord+`
+actions allow you to perform various actions based on which specific combination
+of input keys are pressed together. Such an unordered combination of keys
+is called a "chord". Each chord can perform a different action, allowing you
+to bind up to `+2^n - 1+` different actions to just `+n+` keys.
+
+Input chords are configured similarly to `+defalias+` with two extra parameters
+at the beginning of each `+defchords+` group: the name of the group and a
+timeout value after which a chord triggers if it isn't triggered by a key release
+or press of a non-chord key before the timeout expires.
+
+[source]
+----
+(defsrc a b c)
+(deflayer default
+  @cha @chb @chc
+)
+
+(defalias
+  cha (chord example a)
+  chb (chord example b)
+  chc (chord example c)
+)
+
+(defchords example 500
+  (a      ) a
+  (   b   ) b
+  (a     c) C-v
+  (a  b  c) @three
+)
+----
+
+The first item of each pair specifies the keys that make up a given chord.
+The second item of each pair is the action to be executed when the given chord
+is pressed and may be any regular or advanced action, including aliases. It
+currently cannot however contain another `+chord+` action.
+
+Note that unlike with `+defseq+`, these keys do not directly correspond to real
+keys and are merely arbitrary labels that make sense within the context of the
+chord.
+They are mapped to real keys in layers by configuring the key in the layer to
+map to a `+(chord name key)+` action where `+name+` is the name of the chords
+group (above `+example+`) and `+key+` is one of these arbitrary labels.
+
+It is perfectly valid to nest these `+chord+` actions that enter "chording mode"
+within other actions like `+tap-dance+` and that will work as one would expect.
+However, this only applies to the first key used to enter "chording mode".
+Once "chording mode" is active, all other keys will be directly handled by
+"chording mode" with no regard for wrapper actions; e.g. if a key is pressed
+and it maps to a tap-hold with a chord as the hold action within, that chord
+key will immediately activate instead of the key needing to be held for the
+timeout period.
+
+**Release behaviour**
+
+For single key actions and output chords — like `lctl` or `S-tab` —
+and for `layer-while-held`,
+an input chord will release the action only when all keys that are part of
+the input chord have been released.
+In other words, if even one key is held for the input chord
+then the output action will be continued to be held,
+but only for the mentioned action categories.
+The behaviour also applies to the actions mentioned above
+when used inside of `multi` but not within any other action.
+
+An exception to the behaviour described above
+for the action categories that would normally apply
+is if a chord decomposition occurs.
+A chord decomposition occurs when you input a chord
+that does not correspond to any action.
+When this happens, kanata splits up the key presses to activate
+other actions from the components of the input chord.
+In this scenario, the behaviour described in the next paragraph will occur.
+
+For chord decompositions and all other action categories,
+the release behaviour is more confusing:
+the output action will end when any key is released during the timeout,
+or if the timeout expires, the output action ends when the *first* key
+that was pressed in the chord gets released.
+This inconsistency is a limitation of the current implementation.
+In these scenarios it is recommended
+to hold down all keys if you want to keep holding
+and to release all keys if you want to do a release.
+This is because it will probably be difficult
+to know which key was pressed first.
+
+If you want to bypass the behaviour of keys being held for chord outputs,
+you could change the chord output actions to be <<macro,macros>> instead.
+Using a macro will guarantee a rapid press+release for the output keys.
+
+
+[[fake-keys]]
+==== Fake keys
+<<table-of-contents,Back to ToC>>
+
+You can define up to 767 fake keys. These keys are not directly mapped to any
+physical key presses and can only be activated via these actions:
+
+* `+(on-press-fakekey <fake key name> <key action>)+`: Activate a fake key
+  action when pressing the key mapped to this action.
+* `+(on-release-fakekey <fake key name> <key action>)+`: Activate a fake key
+  action when releasing the key mapped to this action.
+* `+(on-idle-fakekey <fake key name> <key action> <idle time>)+`:
+  Activate a fake key action when kanata has been idle
+  for at least `idle time` milliseconds.
+
+A fake key can be defined in a `+deffakekeys+` configuration entry. Configuring
+this entry is similar to `+defalias+`, but you cannot make use of aliases
+inside of `+deffakekeys+` to shorten an action. You can however refer to
+previously defined fake keys.
+
+The aforementioned `+<key action>+` can be one of four values:
+
+* `+press+`: Press the fake key. It will not be released until another action
+  triggers a release or tap.
+* `+release+`: Release the fake key. If it's not already pressed, this does nothing.
+* `+tap+`: Press and release the fake key. If it's already pressed, this only releases it.
+* `+toggle+`: Press the fake key if not already pressed, otherwise release it.
+
+Expanding on the `on-idle-fakekey` action some more,
+the wording that "kanata" has been idle is important.
+Even if the keyboard is idle, kanata may not yet be idle.
+For example, if a long-running macro is playing,
+or kanata is waiting for the timeout of actions such as `caps-word` or `tap-dance`,
+kanata is not yet idle, and the tick count for the `<idle time>` parameter
+will not yet be counting even if you no longer have any keyboard keys pressed.
+
+.Example:
+[source]
+----
+(deffakekeys
+  ctl lctl
+  sft lsft
+  met lmet
+  alt lalt
+
+  ;; Press all modifiers
+  pal (multi
+        (on-press-fakekey ctl press)
+        (on-press-fakekey sft press)
+        (on-press-fakekey met press)
+        (on-press-fakekey alt press)
+      )
+
+  ;; Release all modifiers
+  ral (multi
+        (on-press-fakekey ctl release)
+        (on-press-fakekey sft release)
+        (on-press-fakekey met release)
+        (on-press-fakekey alt release)
+      )
+)
+
+(defalias
+  psf (on-press-fakekey sft press)
+  rsf (on-press-fakekey sft release)
+
+  pal (on-press-fakekey pal tap)
+  ral (on-press-fakekey ral tap)
+
+  isf (on-idle-fakekey sft tap 1000)
+)
+
+(deflayer use-fake-keys
+  @psf @rsf @pal @ral a s d f @isf
+)
+----
+
+
+For more context, you can read the
+https://github.com/jtroo/kanata/issues/80[issue that sparked the creation of fake keys].
+
+Something notable about fake keys is that they don't always interrupt the state
+of an active `+tap-dance-eager+`. If a `macro` action is assigned to a fake
+key, this won't interrupt a tap dance. However, most other action types,
+notably a "normal" key action like `+rsft+` will still interrupt a tap dance.
+
+===== Aside: broken delay action
+
+The implementation of the following actions are broken in many use cases:
+`on-press-fakekey-delay`, `on-release-fakekey-delay`.
+
+Because these actions exist and might otherwise be discovered anyway,
+it seems better to warn about it here in the documentation.
+You should use the `macro` action instead.
+The `macro` action can operate on fake keys.
+
+[[sequences]]
+==== Sequences
+<<table-of-contents,Back to ToC>>
+
+The `+sldr+` action makes kanata go into "sequence" mode. The action name is
+short for "sequence leader". This comes from Vim which has the concept of a configurable
+sequence leader key. When in sequence mode, keys are not typed
+(<<sequence-input-mode,by default>>)
+but are saved until one of the following happens:
+
+* A key is typed that does not match any sequence
+* `+sequence-timeout+` milliseconds elapses since the most recent key press
+
+Sequences are configured similarly to `+deffakekeys+`. The first parameter of a
+pair must be a defined fake key name. The second parameter is a list of keys
+that will activate a fake key tap when typed in the defined order. More
+precisely, the action triggered is:
+
+`+(on-press-fakekey <fake key name> tap)+`
+
+.Example:
+[source]
+----
+(defseq git-status (g s t))
+(deffakekeys git-status (macro g i t spc s t a t u s))
+(defalias rcl (tap-hold-release 200 200 sldr rctl))
+
+(defseq
+    dotcom (. S-3)
+    dotorg (. S-4)
+)
+(deffakekeys
+    dotcom (macro . c o m)
+    dotorg (macro . o r g)
+)
+----
+
+For more context, you can read the
+https://github.com/jtroo/kanata/issues/97[design and motivation of sequences].
+You may also be interested in
+https://github.com/jtroo/kanata/blob/main/docs/sequence-adding-chords-ideas.md[the document describing chords in sequences]
+to read about how chords in sequences behave.
+
+===== Override the global timeout and input mode
+
+An alternative to using `sldr` is the `sequence` action.
+The syntax is `(sequence <timeout>)`.
+This enters sequence mode with a sequence timeout
+different from the globally configured one.
+
+The `sequence` action can also be called with a second parameter.
+The second parameter is an override for `sequence-input-mode`:
+
+----
+(sequence <timeout> <input-mode>)
+----
+
+
+.Example:
+[source]
+----
+;; Enter sequence mode and input . with a timeout of 250
+(defalias dot-sequence (macro (sequence 250) 10 .))
+
+;; Enter sequence mode and input . with a timeout of 250 and using hidden-delay-type
+(defalias dot-sequence (macro (sequence 250 hidden-delay-type) 10 .))
+----
+
+
+[[fork]]
+==== fork
+<<table-of-contents,Back to ToC>>
+
+The fork action accepts two actions and a key list.
+The first (left) action will activate by default.
+The second (right) action will activate
+if any of the keys in the third parameter (right-trigger-keys) are currently active.
+
+.Example:
+[source]
+----
+(defalias
+  frk (fork k @special (lalt ralt))
+)
+----
+
+
+[[switch]]
+==== switch
+<<table-of-contents,Back to ToC>>
+
+The `switch` action accepts multiple cases.
+One case is a triple of:
+
+- keys check
+- action: to activate if keys check succeeds
+- `fallthrough|break`: choose to continue vs. stop evaluating cases
+
+The default use of keys check behaves similarly to fork.
+
+For example, the keys check `(a b c)` will activate the corresponding action
+if any of a, b, or c are currently pressed.
+
+The keys check also accepts the boolean operators `and|or|not` to allow more
+complex use cases.
+
+The order of cases matters.
+For example, if two different cases match the currently pressed keys,
+the case listed earlier in the configuration will activate first.
+If the early case uses break, the second case will not activate.
+Otherwise if fallthrough is used,
+the second case will activate sequentially after the first case.
+This idea generalizes to more than two cases,
+but the two case example is hopefully simple and effective enough.
+
+.Example:
+[source]
+----
+(defalias
+  swt (switch
+    ;; case 1
+    ((and a b (or c d) (or e f))) @ac1 break
+    ;; case 2
+    (a b c) @ac2 fallthrough
+    ;; case 3
+    () @ac3 break
+  )
+)
+----
+
+Below is a description of how this example behaves.
+
+===== Case 1
+
+----
+((and a b (or c d) (or e f))) a break
+----
+
+Translating case 1's keys check to some other common languages
+might look like:
+
+----
+(a && b && (c || d) && (e || f))
+----
+
+If the keys check passes, the action `@ac1` will activate.
+No other action will activate since `break` is used.
+
+===== Cases 2 and 3
+
+----
+(a b c) c fallthrough
+() b break
+----
+
+Case 2's key check behaves like that of `fork`, i.e.
+
+    (or a b c)
+
+or for some other common languages:
+
+    a || b || c
+
+If this keys check passes and the case 1 does not pass,
+the action `@ac2` will activate first.
+Since the keys check of case 3 always passes, `@ac3` will activate next.
+
+If neither case 1 or case 2 pass their keys checks,
+case 3 will always activate with `@ac3`.
+
+[[key-history-and-key-timing]]
+===== key-history and key-timing
+
+In addition to simple keys there are two list items
+that can be used within the case keys check
+that compare against your typed key history:
+
+* `key-history`
+* `key-timing`
+
+The `key-history` item compares the order that keys were typed.
+It accepts, in order:
+
+* a key
+* the key recency
+
+The key recency must be in the range 1-8,
+where 1 is the most recent key that was pressed
+and 8 is 8th most recent key pressed.
+
+.Example:
+[source]
+----
+(defalias
+  swh (switch
+    ((key-history a 1)) S-a break
+    ((key-history b 1)) S-b break
+    ((key-history c 1)) S-c break
+    ((key-history d 8)) (macro d d d) break
+    () XX break
+  )
+)
+----
+
+The `key-timing` compares how long ago recent key typing events occurred.
+It accepts, in order,
+
+* the key recency
+* a comparison string, which is one of: `less-than|greater-than|lt|gt`
+* number of milliseconds to compare against
+
+The key recency must be in the range 1-8,
+where 1 is the most recent key that was pressed
+and 8 is 8th most recent key pressed.
+Most use cases are expected to use a value of 1 for this parameter,
+but perhaps you can find a creative use for the other values.
+
+The comparison string determines how the actual key event timing
+will be compared to the provided timing.
+
+The number of milliseconds must be 0-65535.
+
+WARNING: The maximum milliseconds value of this configuration item
+across your whole configuration
+will be a lower bound of how long it takes for kanata to become idle
+and stop processing its state machine every approxmately 1ms.
+
+.Example:
+[source]
+----
+(defalias
+  swh (switch
+    ((key-timing 1 less-than 200)) S-a break
+    ((key-timing 1 greater-than 500)) S-b break
+    ((key-timing 2 lt 1000)) S-c break
+    ((key-timing 8 gt 2000)) (macro d d d) break
+    () XX break
+  )
+)
+----
+
+===== not
+
+The examples presented so far have not included the `not` boolean operator.
+This operator will now be discussed.
+Syntactically, the `not` operator is used similarly to `or|and`.
+Functionally, it means "not **any** of" the list elements.
+
+.Example:
+[source]
+----
+(defalias
+  swn (switch
+    ((not x y z)) S-a break
+    ;; the above and below cases are equivalent in logic
+    ((not (or x y z))) S-a break
+  )
+)
+----
+
+In potentially more familiar notation, both cases have the logic:
+
+    !(x || y || z)
+
+[[dynamic-macro]]
+===== dynamic-macro
+<<table-of-contents,Back to ToC>>
+
+The dynamic-macro actions allow for recording and playing key presses. The
+dynamic macro records physical key presses, as opposed to kanata's outputs.
+This allows the dynamic macro to replicate any action, but it means that if
+the macro starts and ends on different layers, then the macro might not be
+properly repeatable.
+
+The action `dynamic-macro-record` accepts one number (0-65535), which represents
+the macro ID. Activating this action will begin recording physical key inputs.
+If `dynamic-macro-record` with the same ID is pressed again, the recording will
+end and be saved. If `dynamic-macro-record` with a different ID is pressed then
+the current recording will end and be saved, then a new recording with the new
+ID will begin.
+
+The action `dynamic-macro-record-stop` will stop and save any active recording.
+There is a variant of this:
+`dynamic-macro-record-stop-truncate`
+This is a list action that takes a single parameter:
+the number of key actions to remove at the end of a dynamic macro.
+This variant is useful if the macro stop button is on a different layer.
+
+The action `dynamic-macro-play` accepts one number (0-65535), which represents
+the macro ID. Activating this action will play the saved recording of physical
+keys from a previous `dynamic-macro-record` with the same macro ID, if it exists.
+
+One can nest dynamic macros within each other, e.g. activate
+`(dynamic-macro-play 1)` while recording with `(dynamic-macro-record 0)`.
+However, dynamic macros cannot recurse; e.g. activating `(dynamic-macro-play 0)`
+while recording with `(dynamic-macro-record 0)` will be ignored.
+
+.Example:
+[source]
+----
+(defalias
+  dr0 (dynamic-macro-record 0)
+  dr1 (dynamic-macro-record 1)
+  dr2 (dynamic-macro-record 2)
+  dp0 (dynamic-macro-play 0)
+  dp1 (dynamic-macro-play 1)
+  dp2 (dynamic-macro-play 2)
+  dms dynamic-macro-record-stop
+  dst (dynamic-macro-record-stop-truncate 1)
+)
+----
+
+[[release-a-key-or-layer]]
+==== Release a key or layer
+<<table-of-contents,Back to ToC>>
+
+You can release a held key or layer via these actions:
+
+* `release-key`: release a key, accepts `defsrc` compatible names
+* `release-layer`: release a while-held layer
+
+An example practical use case for `release-key` is seen in the `multi` section
+directly below.
+
+There is currently no known practical use case for
+`release-layer`, but it exists nonetheless.
+
+
+==== unmod[[unmod]]
+<<table-of-contents,Back to ToC>>
+
+The `unmod` action will release all modifiers temporarily
+and send one or more keys.
+After the `unmod` key is released, the released modifiers are pressed again.
+The modifiers affected are: `lsft,rsft,lctl,rctl,lmet,rmet,lalt,ralt`.
+
+A variant of `unmod` is `unshift`.
+This action only releases the `lsft,rsft` keys.
+This can be useful for forcing unshifted keys while AltGr is still held.
+
+.Example:
+[source]
+----
+(defalias
+  ;; holding shift and tapping a @um1 key will still output 1.
+  um1 (unmod 1)
+  ;; dead keys é (as opposed to using AltGr) that outputs É when shifted
+  dké (macro (unmod ') e)
+
+  ;; In ISO German QWERTZ, force unshifted symbols even if shift is held
+  { (unshift ralt 7)
+  [ (unshift ralt 8)
+)
+----
+
+[[cmd]]
+==== cmd
+<<table-of-contents,Back to ToC>>
+
+WARNING: This action does not work unless you use the appropriate binary
+or - if compiling yourself - the appropriate feature flag.
+Additionally you must add the <<danger-enable-cmd>> `defcfg` option.
+
+The `+cmd+` action executes a program with arguments. It accepts one or more
+strings. The first string is the program that will be run and the following
+strings are arguments to that program. The arguments are provided to the
+program in the order written in the config file.
+Lists may also be used within `cmd`
+which you may desire to do for reuse via `defvar`.
+Lists will be flattened such that arguments are provided to the program
+in the order written in the config file, regardless of list nesting.
+To be technical, it would be a depth-first flattening (similar to DFS).
+
+NOTE: commands are executed directly and not via a shell, so you cannot make
+use of environment variables or symbols with special meaning.
+For example `+~+` or `+$HOME+` in Linux will not be
+substituted with your home directory.
+If you want to execute with a shell program
+use the shell as the first parameter, e.g. `bash` or `powershell.exe`.
+
+.Example:
+[source]
+----
+(defalias
+  cm1 (cmd rm -fr /tmp/testing)
+
+  ;; You can use bash -c and then a quoted string to execute arbitrary text in
+  ;; bash. All text within double-quotes is treated as a single string.
+  cm2 (cmd bash -c "echo hello world")
+)
+----
+
+There is a variant of `cmd`: `cmd-output-keys`. This variant reads the output
+of the executed program and reads it as an S-expression, similarly to the
+<<macro, macro action>>. However — unlike macro — only keys, chords, and
+chorded lists are supported. Delays and other actions are not supported.
+
+[source]
+----
+(defalias
+  ;; bash: type date-time as YYYY-MM-DD HH:MM
+  pdb (cmd-output-keys bash -c "date +'%F %R' | sed 's/./& /g' | sed 's/:/S-;/g' | sed 's/\(.\{20\}\)\(.*\)/\(\1 spc \2\)/'")
+
+  ;; powershell: type date-time as YYYY-MM-DD HH:MM
+  pdp (cmd-output-keys powershell.exe "echo '(' (((Get-Date -Format 'yyyy-MM-dd HH:mm').toCharArray() -join ' ').insert(20, ' spc ') -replace ':','S-;') ')'")
+)
+----
+
+[[arbitrary-code]]
+==== arbitrary-code
+<<table-of-contents,Back to ToC>>
+
+The `arbitrary-code` action allows sending an arbitrary number to kanata's
+output mechanism. The press is sent when pressed, and the release sent when
+released. This action can be useful for testing keys that are not yet named or
+mapped in kanata. Please contribute findings with names and mappings, either in
+a GitHub issue or as a pull request!
+
+WARNING: This is not cross platform!
+
+WARNING: When using the Interception driver, this action is still sent over
+SendInput.
+
+[source]
+----
+(defalias
+  ab1 (arbitrary-code 700)
+)
+----
+
+
 [[mouse-actions]]
-=== Mouse actions
+=== Mouse
 <<table-of-contents,Back to ToC>>
 
 You can click the left, middle, and right buttons using kanata actions, do
@@ -908,580 +1948,6 @@ WARNING: Due to the nature of pixels being whole numbers, some values such as
   _    pgdn mlft _    mrgt mmid _    mbck mfwd _    @ms↑ _    _
   @fst _    mltp _    mrtp mmtp _    mbtp mftp @ms← @ms↓ @ms→
   _    _    _              _              _    _    _
-)
-----
-
-[[tap-dance]]
-=== tap-dance
-<<table-of-contents,Back to ToC>>
-
-The `+tap-dance+` action allows repeated tapping of a key to result in
-different actions. It is followed by a timeout (unit: ms) and a list
-of keys or actions. Each time the key is pressed, its timeout will reset. The
-action will be chosen if one of the following events occur:
-
-* the timeout expires
-* a different key is pressed
-* the key is repeated up to the final action
-
-You may put normal keys or other actions in `+tap-dance+`.
-
-.Example:
-[source]
-----
-(defalias
-  ;; 1 tap : "A" key
-  ;; 2 taps: Control+C
-  ;; 3 taps: Switch to another layer
-  ;; 4 taps: Escape key
-  td (tap-dance 200 (a C-c (layer-switch l2) esc))
-)
-----
-
-There is a variant of `tap-dance` with the name `tap-dance-eager`. The variant
-is parsed identically but the difference is that it will activate every
-action in the sequence as the taps progress.
-
-In the example below, repeated taps will, in order:
-
-1. type `a`
-2. erase the `a` and type `bb`
-3. erase the `bb` and type `ccc`
-
-[source]
-----
-(defalias
-  td2 (tap-dance-eager 500 (
-    (macro a) ;; use macro to prevent auto-repeat of the key
-    (macro bspc b b)
-    (macro bspc bspc c c c)
-  ))
-)
-----
-
-[[one-shot]]
-=== one-shot
-<<table-of-contents,Back to ToC>>
-
-The `+one-shot+` action is similar to "sticky keys", if you know what that is.
-This activates an action or key until either the timeout expires or a different
-key is used. The `+one-shot+` action must be followed by a timeout (unit:
-ms) and another key or action.
-
-Some of the intended use cases are:
-
-* press a modifier for exactly one following key press
-* switch to another layer for exactly one following key press
-
-If a `+one-shot+` key is held then it will act as the regular key. E.g. holding
-a key assigned with `+@os1+` in the example below will keep Left Shift held for
-every key, not just one, as long as it's still physically pressed.
-
-Pressing multiple `+one-shot+` keys in a row within the timeout will combine
-the actions of those keys and reset the timeout to the value of the most
-recently pressed `+one-shot+` key.
-
-There are four variants of the `+one-shot+` action:
-
-- `+one-shot-press+`:
-  end on the first press of another key
-- `+one-shot-release+`:
-  end on the first release of another key
-- `+one-shot-press-pcancel+`:
-  end on the first press of another key
-  or on re-press of another active one-shot key
-- `+one-shot-release-pcancel+`:
-  end on the first release of another key
-  or on re-press of another active one-shot key
-
-It is important to note that the first activation of a one-shot key
-determines the behaviour with regards to the 4 variants
-for all subsequent one-shot key activations,
-even if a following one-shot key has a different configuration
-than the initial key pressed.
-
-The default name `+one-shot+` corresponds to `+one-shot-press+`.
-
-.Example:
-[source]
-----
-(defalias
-  os1 (one-shot 500 (layer-while-held another-layer))
-  os2 (one-shot-press 2000 lsft)
-  os3 (one-shot-release 2000 lctl)
-  os4 (one-shot-press-pcancel 2000 lalt)
-  os5 (one-shot-release-pcancel 2000 lmet)
-)
-----
-
-
-[[tap-hold]]
-=== tap-hold
-<<table-of-contents,Back to ToC>>
-
-WARNING: The `tap-hold` action and all variants can behave unexpectedly on Linux
-with respect to repeat of antecedent key presses.
-The full context is in https://github.com/jtroo/kanata/discussions/422[discussion #422].
-In brief, the workaround is to use `tap-hold` inside of <<multi,multi>>,
-combined with another key action that behaves as a no-op like `f24`. +
-Example: `(multi f24 (tap-hold ...))`
-
-The `+tap-hold+` action allows you to have one action/key for a "tap" and a
-different action/key for a "hold". A tap is a rapid press then release of the
-key whereas a hold is a long press.
-
-The action takes 4 parameters in the listed order:
-
-. tap timeout (unit: ms)
-. hold timeout (unit: ms)
-. tap action
-. hold action
-
-The tap timeout is the number of milliseconds within which a rapid
-press+release+press of a key will result in the tap action being held instead
-of the hold action activating.
-
-.Tap timeout in more detail
-[%collapsible,indent=4]
-====
-The way a `tap-hold` action works with respect to the tap timeout
-is often unclear to newcomers.
-To make it concrete, the output event sequence of the `tap-hold` action
-`(tap-hold $tap-timeout 200 a lctl)`
-for varying values of `$tap-timeout`
-with a fixed input event sequence will be described.
-
-The input event sequence is:
-
-- press
-- 50 ms elapses
-- release
-- 50 ms elapses
-- press
-- 300 ms elapses
-- release
-
-With `(defvar $tap-timeout 0)`, the output event sequence is:
-
-- 50 ms elapses
-- press `a`
-- release `a`
-- 250 ms elapses
-- press `lctl`
-- 100 ms elapses
-- release `lctl`
-
-The above output sequence is the same for all `$tap-timeout` values
-between and including `0` and `99`.
-
-For a value of `100` or greater for `$tap-timeout`,
-the output event sequence is instead:
-
-- 50 ms elapses
-- press `a`
-- release `a`
-- 50 ms elapses
-- press `a`
-- 300 ms elapses
-- release `a`
-====
-
-The hold timeout is the number of milliseconds after which the hold action will
-activate.
-
-There are two additional variants of `+tap-hold+`:
-
-* `+tap-hold-press+`
-** If there is a press of a different key, the hold action is activated even if
-the hold timeout hasn't expired yet
-* `+tap-hold-release+`
-** If there is a press+release of a different key, the hold action is activated
-even if the hold timeout hasn't expired yet
-
-These variants may be useful if you want more responsive tap-hold keys,
-but you should be wary of activating the hold action unintentionally.
-
-.Example:
-[source]
-----
-(defalias
-  anm (tap-hold         200 200 a @num) ;; tap: a      hold: numbers layer
-  oar (tap-hold-press   200 200 o @arr) ;; tap: o      hold: arrows layer
-  ech (tap-hold-release 200 200 e @chr) ;; tap: e      hold: chords layer
-)
-----
-
-There are further additional variants of `tap-hold-press` and `tap-hold-release`:
-
-- `tap-hold-press-timeout`
-- `tap-hold-release-timeout`
-
-These variants take a 5th parameter, in addition to the same 4 as the other
-variants. The 5th parameter is another action, which will activate if the hold
-timeout expires as opposed to being triggered by other key actions, whereas the
-non `-timeout` variants will activate the hold action in both cases.
-
-- `tap-hold-release-keys`
-
-This variant takes a 5th parameter which is a list of keys
-that trigger an early tap
-when they are pressed while the `tap-hold-release-keys` action is waiting.
-Otherwise this behaves as `tap-hold-release`.
-
-The keys in the 5th parameter correspond to the physical input keys,
-or in other words the key that corresponds to `defsrc`.
-This is in contrast to the `fork` and `switch` actions
-which operates on outputted keys, or in other words the outputs
-that are in `deflayer`, `defalias`, etc. for the corresponding `defsrc` key.
-
-.Example:
-[source]
-----
-(defalias
-  ;; tap: o    hold: arrows layer    timeout: backspace
-  oat (tap-hold-press-timeout   200 200 o @arr bspc)
-  ;; tap: e    hold: chords layer    timeout: esc
-  ect (tap-hold-release-timeout 200 200 e @chr esc)
-  ;; tap: u    hold: misc layer      early tap if any of: (a o e) are pressed
-  umk (tap-hold-release-keys 200 200 u @msc (a o e))
-)
-----
-
-- `tap-hold-except-keys`
-
-This variant takes a 5th parameter which is a list of keys
-that always trigger a tap
-when they are pressed while the `tap-hold-except-keys` action is waiting.
-No key is ever output until there is either a release of the key or any other
-key is pressed. This differs from `tap-hold` behaviour.
-
-The keys in the 5th parameter correspond to the physical input keys,
-or in other words the key that corresponds to `defsrc`.
-This is in contrast to the `fork` and `switch` actions
-which operates on outputted keys, or in other words the outputs
-that are in `deflayer`, `defalias`, etc. for the corresponding `defsrc` key.
-
-.Example:
-[source]
-----
-(defalias
-  ;; tap: o    hold: arrows layer    timeout: backspace
-  oat (tap-hold-press-timeout   200 200 o @arr bspc)
-  ;; tap: e    hold: chords layer    timeout: esc
-  ect (tap-hold-release-timeout 200 200 e @chr esc)
-  ;; tap: u    hold: misc layer      always tap if any of: (a o e) are pressed
-  umk (tap-hold-except-keys 200 200 u @msc (a o e))
-)
-----
-
-[[macro]]
-=== macro
-<<table-of-contents,Back to ToC>>
-
-The `+macro+` action will tap a sequence of keys with optional
-delays. This is different from `+multi+` because in the `+multi+` action,
-all keys are held, whereas in `+macro+`, keys are pressed then released.
-
-This means that with `+macro+` you can have some letters capitalized and others
-not. This is not possible with `+multi+`.
-
-The `+macro+` action accepts one or more keys, some actions, chords, and delays
-(unit: ms).  It also accepts a list prefixed with <<output-chordscombos,output chord>>
-modifiers where the list is subject to the aforementioned restrictions. The
-number keys will be parsed as delays, so they must be aliased to be used in a macro.
-
-Up to 4 macros can be active at the same time.
-
-The actions supported in `+macro+` are:
-
-* <<cmd, cmd>>
-* <<unicode, unicode>>
-* <<mouse-actions,mouse actions>>
-* <<repeat-key,repeat>>
-* <<live-reload,live reload>>
-* <<fake-keys,fake keys>>
-* <<sequences,sequence leader>>
-* <<arbitrary-code,arbitrary keycode>>
-* <<dynamic-macro,dynamic macro>>
-* <<unmod,unmod>>
-
-NOTE: Some of these actions may need short delays between.
-For example, `(macro a (unmod b) 5 (unmod c) d))`
-needs the delay of `5` to work correctly.
-
-.Example:
-[source]
-----
-(defalias
-  : S-;
-  8 8
-  0 0
-  🙃 (unicode 🙃)
-
-  ;; Type "http://localhost:8080"
-  lch (macro h t t p @: / / 100 l o c a l h o s t @: @8 @0 @8 @0)
-
-  ;; Type "I am HAPPY my FrIeNd 🙃"
-  hpy (macro S-i spc a m spc S-(h a p p y) spc m y S-f r S-i e S-n d spc @🙃)
-
-  ;; alt-tab(x3) and alt-shift-tab(x3) with macro
-  tfd (macro A-(tab 200 tab 200 tab))
-  tbk (macro A-S-(tab 200 tab 200 tab))
-)
-----
-
-There is a variant of the `+macro+` action that will cancel all active macros
-upon releasing the key: `+macro-release-cancel+`. It is parsed identically to
-the non-cancelling version. An example use case for this action is holding down
-a key to get different outputs, similar to tap-dance but one can see which keys
-are being outputted.
-
-E.g. in the example below, when holding the key, first `1` is typed, then
-replaced by `!` after 500ms, and finally that is replaced by `@` after another
-500ms. However, if the key is released, the last character typed will remain
-and the rest of the macro does not run.
-
-[source]
-----
-(defalias
-  1 1
-
-  ;; macro-release-cancel to output different characters with visual feedback
-  ;; after holding for different amounts of time.
-  1!@ (macro-release-cancel @1 500 bspc S-1 500 bspc S-2)
-)
-----
-
-There are further variants of the two `macro` actions which repeat while held.
-The repeat will only occur once all macros have completed,
-including the held macro key.
-If multiple repeating macros are being held simulaneously,
-only the most recently pressed macro will be repeated.
-
-[source]
-----
-(defalias
-  mr1 (macro-repeat mltp)
-  mr2 (macro-repeat-release-cancel mltp)
-)
-----
-
-[[dynamic-macro]]
-=== dynamic-macro
-<<table-of-contents,Back to ToC>>
-
-The dynamic-macro actions allow for recording and playing key presses. The
-dynamic macro records physical key presses, as opposed to kanata's outputs.
-This allows the dynamic macro to replicate any action, but it means that if
-the macro starts and ends on different layers, then the macro might not be
-properly repeatable.
-
-The action `dynamic-macro-record` accepts one number (0-65535), which represents
-the macro ID. Activating this action will begin recording physical key inputs.
-If `dynamic-macro-record` with the same ID is pressed again, the recording will
-end and be saved. If `dynamic-macro-record` with a different ID is pressed then
-the current recording will end and be saved, then a new recording with the new
-ID will begin.
-
-The action `dynamic-macro-record-stop` will stop and save any active recording.
-There is a variant of this:
-`dynamic-macro-record-stop-truncate`
-This is a list action that takes a single parameter:
-the number of key actions to remove at the end of a dynamic macro.
-This variant is useful if the macro stop button is on a different layer.
-
-The action `dynamic-macro-play` accepts one number (0-65535), which represents
-the macro ID. Activating this action will play the saved recording of physical
-keys from a previous `dynamic-macro-record` with the same macro ID, if it exists.
-
-One can nest dynamic macros within each other, e.g. activate
-`(dynamic-macro-play 1)` while recording with `(dynamic-macro-record 0)`.
-However, dynamic macros cannot recurse; e.g. activating `(dynamic-macro-play 0)`
-while recording with `(dynamic-macro-record 0)` will be ignored.
-
-.Example:
-[source]
-----
-(defalias
-  dr0 (dynamic-macro-record 0)
-  dr1 (dynamic-macro-record 1)
-  dr2 (dynamic-macro-record 2)
-  dp0 (dynamic-macro-play 0)
-  dp1 (dynamic-macro-play 1)
-  dp2 (dynamic-macro-play 2)
-  dms dynamic-macro-record-stop
-  dst (dynamic-macro-record-stop-truncate 1)
-)
-----
-
-[[fork]]
-=== fork
-<<table-of-contents,Back to ToC>>
-
-The fork action accepts two actions and a key list.
-The first (left) action will activate by default.
-The second (right) action will activate
-if any of the keys in the third parameter (right-trigger-keys) are currently active.
-
-.Example:
-[source]
-----
-(defalias
-  frk (fork k @special (lalt ralt))
-)
-----
-
-[[caps-word]]
-=== caps-word
-<<table-of-contents,Back to ToC>>
-
-The `caps-word` action triggers a state where the `lsft` key
-will be added to the active key list
-when a set of specific keys are active.
-The keys are: `a-z` and `-`, which will be outputted as `A-Z` and `_`
-respectively when using the US layout.
-
-Examples where this is helpful
-is capitalizing a single important word
-like in `IMPORTANT!`
-or defining a constant in code
-like `const P99_99_VALUE: ...`.
-This has an advantage over the regular caps lock
-because it automatically ends
-so it doesn't need to be toggled off manually,
-and it also shifts `-` to `_`
-which caps lock does not do.
-
-The `caps-word` state ends when the keyboard is idle
-for the duration of the defined timeout (1st parameter),
-or a terminating key is pressed.
-Every key is a terminating key
-except the keys which get capitalized
-and the extra keys in this list:
-
-- `0-9`
-- `kp0-kp9`
-- `bspc del`
-- `up down left rght`
-
-You can use `caps-word-custom` instead of `caps-word`
-if you want to manually define which keys are capitalized (2nd parameter)
-and what the extra non-terminal+non-capitalized keys should be (3rd parameter).
-
-[source]
-----
-(defalias
-  cw (caps-word 2000)
-
-  ;; This example is similar to the default caps-word behaviour but it moves the
-  ;; 0-9 keys to the capitalized key list from the extra non-terminating key list.
-  cwc (caps-word-custom
-    2000
-    (a b c d e f g h i j k l m n o p q r s t u v w x y z 0 1 2 3 4 5 6 7 8 9)
-    (kp0 kp1 kp2 kp3 kp4 kp5 kp6 kp7 kp8 kp9 bspc del up down left rght)
-  )
-)
-----
-
-=== unmod[[unmod]]
-<<table-of-contents,Back to ToC>>
-
-The `unmod` action will release all modifiers temporarily
-and send one or more keys.
-After the `unmod` key is released, the released modifiers are pressed again.
-The modifiers affected are: `lsft,rsft,lctl,rctl,lmet,rmet,lalt,ralt`.
-
-A variant of `unmod` is `unshift`.
-This action only releases the `lsft,rsft` keys.
-This can be useful for forcing unshifted keys while AltGr is still held.
-
-.Example:
-[source]
-----
-(defalias
-  ;; holding shift and tapping a @um1 key will still output 1.
-  um1 (unmod 1)
-  ;; dead keys é (as opposed to using AltGr) that outputs É when shifted
-  dké (macro (unmod ') e)
-
-  ;; In ISO German QWERTZ, force unshifted symbols even if shift is held
-  { (unshift ralt 7)
-  [ (unshift ralt 8)
-)
-----
-
-[[cmd]]
-=== cmd
-<<table-of-contents,Back to ToC>>
-
-WARNING: This action does not work unless you use the appropriate binary
-or - if compiling yourself - the appropriate feature flag.
-Additionally you must add the <<danger-enable-cmd>> `defcfg` option.
-
-The `+cmd+` action executes a program with arguments. It accepts one or more
-strings. The first string is the program that will be run and the following
-strings are arguments to that program. The arguments are provided to the
-program in the order written in the config file.
-Lists may also be used within `cmd`
-which you may desire to do for reuse via `defvar`.
-Lists will be flattened such that arguments are provided to the program
-in the order written in the config file, regardless of list nesting.
-To be technical, it would be a depth-first flattening (similar to DFS).
-
-NOTE: commands are executed directly and not via a shell, so you cannot make
-use of environment variables or symbols with special meaning.
-For example `+~+` or `+$HOME+` in Linux will not be
-substituted with your home directory.
-If you want to execute with a shell program
-use the shell as the first parameter, e.g. `bash` or `powershell.exe`.
-
-.Example:
-[source]
-----
-(defalias
-  cm1 (cmd rm -fr /tmp/testing)
-
-  ;; You can use bash -c and then a quoted string to execute arbitrary text in
-  ;; bash. All text within double-quotes is treated as a single string.
-  cm2 (cmd bash -c "echo hello world")
-)
-----
-
-There is a variant of `cmd`: `cmd-output-keys`. This variant reads the output
-of the executed program and reads it as an S-expression, similarly to the
-<<macro, macro action>>. However — unlike macro — only keys, chords, and
-chorded lists are supported. Delays and other actions are not supported.
-
-[source]
-----
-(defalias
-  ;; bash: type date-time as YYYY-MM-DD HH:MM
-  pdb (cmd-output-keys bash -c "date +'%F %R' | sed 's/./& /g' | sed 's/:/S-;/g' | sed 's/\(.\{20\}\)\(.*\)/\(\1 spc \2\)/'")
-
-  ;; powershell: type date-time as YYYY-MM-DD HH:MM
-  pdp (cmd-output-keys powershell.exe "echo '(' (((Get-Date -Format 'yyyy-MM-dd HH:mm').toCharArray() -join ' ').insert(20, ' spc ') -replace ':','S-;') ')'")
-)
-----
-
-[[arbitrary-code]]
-=== arbitrary-code
-<<table-of-contents,Back to ToC>>
-
-The `arbitrary-code` action allows sending an arbitrary number to kanata's
-output mechanism. The press is sent when pressed, and the release sent when
-released. This action can be useful for testing keys that are not yet named or
-mapped in kanata. Please contribute findings with names and mappings, either in
-a GitHub issue or as a pull request!
-
-WARNING: This is not cross platform!
-
-WARNING: When using the Interception driver, this action is still sent over
-SendInput.
-
-[source]
-----
-(defalias
-  ab1 (arbitrary-code 700)
 )
 ----
 
@@ -2171,264 +2637,6 @@ a non-applicable operating system.
 
 == Advanced/weird features[[advanced-weird-features]]
 
-[[fake-keys]]
-=== Fake keys
-<<table-of-contents,Back to ToC>>
-
-You can define up to 767 fake keys. These keys are not directly mapped to any
-physical key presses and can only be activated via these actions:
-
-* `+(on-press-fakekey <fake key name> <key action>)+`: Activate a fake key
-  action when pressing the key mapped to this action.
-* `+(on-release-fakekey <fake key name> <key action>)+`: Activate a fake key
-  action when releasing the key mapped to this action.
-* `+(on-idle-fakekey <fake key name> <key action> <idle time>)+`:
-  Activate a fake key action when kanata has been idle
-  for at least `idle time` milliseconds.
-
-A fake key can be defined in a `+deffakekeys+` configuration entry. Configuring
-this entry is similar to `+defalias+`, but you cannot make use of aliases
-inside of `+deffakekeys+` to shorten an action. You can however refer to
-previously defined fake keys.
-
-The aforementioned `+<key action>+` can be one of four values:
-
-* `+press+`: Press the fake key. It will not be released until another action
-  triggers a release or tap.
-* `+release+`: Release the fake key. If it's not already pressed, this does nothing.
-* `+tap+`: Press and release the fake key. If it's already pressed, this only releases it.
-* `+toggle+`: Press the fake key if not already pressed, otherwise release it.
-
-Expanding on the `on-idle-fakekey` action some more,
-the wording that "kanata" has been idle is important.
-Even if the keyboard is idle, kanata may not yet be idle.
-For example, if a long-running macro is playing,
-or kanata is waiting for the timeout of actions such as `caps-word` or `tap-dance`,
-kanata is not yet idle, and the tick count for the `<idle time>` parameter
-will not yet be counting even if you no longer have any keyboard keys pressed.
-
-.Example:
-[source]
-----
-(deffakekeys
-  ctl lctl
-  sft lsft
-  met lmet
-  alt lalt
-
-  ;; Press all modifiers
-  pal (multi
-        (on-press-fakekey ctl press)
-        (on-press-fakekey sft press)
-        (on-press-fakekey met press)
-        (on-press-fakekey alt press)
-      )
-
-  ;; Release all modifiers
-  ral (multi
-        (on-press-fakekey ctl release)
-        (on-press-fakekey sft release)
-        (on-press-fakekey met release)
-        (on-press-fakekey alt release)
-      )
-)
-
-(defalias
-  psf (on-press-fakekey sft press)
-  rsf (on-press-fakekey sft release)
-
-  pal (on-press-fakekey pal tap)
-  ral (on-press-fakekey ral tap)
-
-  isf (on-idle-fakekey sft tap 1000)
-)
-
-(deflayer use-fake-keys
-  @psf @rsf @pal @ral a s d f @isf
-)
-----
-
-
-For more context, you can read the
-https://github.com/jtroo/kanata/issues/80[issue that sparked the creation of fake keys].
-
-Something notable about fake keys is that they don't always interrupt the state
-of an active `+tap-dance-eager+`. If a `macro` action is assigned to a fake
-key, this won't interrupt a tap dance. However, most other action types,
-notably a "normal" key action like `+rsft+` will still interrupt a tap dance.
-
-==== Aside: broken delay action
-
-The implementation of the following actions are broken in many use cases:
-`on-press-fakekey-delay`, `on-release-fakekey-delay`.
-
-Because these actions exist and might otherwise be discovered anyway,
-it seems better to warn about it here in the documentation.
-You should use the `macro` action instead.
-The `macro` action can operate on fake keys.
-
-[[sequences]]
-=== Sequences
-<<table-of-contents,Back to ToC>>
-
-The `+sldr+` action makes kanata go into "sequence" mode. The action name is
-short for "sequence leader". This comes from Vim which has the concept of a configurable
-sequence leader key. When in sequence mode, keys are not typed
-(<<sequence-input-mode,by default>>)
-but are saved until one of the following happens:
-
-* A key is typed that does not match any sequence
-* `+sequence-timeout+` milliseconds elapses since the most recent key press
-
-Sequences are configured similarly to `+deffakekeys+`. The first parameter of a
-pair must be a defined fake key name. The second parameter is a list of keys
-that will activate a fake key tap when typed in the defined order. More
-precisely, the action triggered is:
-
-`+(on-press-fakekey <fake key name> tap)+`
-
-.Example:
-[source]
-----
-(defseq git-status (g s t))
-(deffakekeys git-status (macro g i t spc s t a t u s))
-(defalias rcl (tap-hold-release 200 200 sldr rctl))
-
-(defseq
-    dotcom (. S-3)
-    dotorg (. S-4)
-)
-(deffakekeys
-    dotcom (macro . c o m)
-    dotorg (macro . o r g)
-)
-----
-
-For more context, you can read the
-https://github.com/jtroo/kanata/issues/97[design and motivation of sequences].
-You may also be interested in
-https://github.com/jtroo/kanata/blob/main/docs/sequence-adding-chords-ideas.md[the document describing chords in sequences]
-to read about how chords in sequences behave.
-
-==== Override the global timeout and input mode
-
-An alternative to using `sldr` is the `sequence` action.
-The syntax is `(sequence <timeout>)`.
-This enters sequence mode with a sequence timeout
-different from the globally configured one.
-
-The `sequence` action can also be called with a second parameter.
-The second parameter is an override for `sequence-input-mode`:
-
-----
-(sequence <timeout> <input-mode>)
-----
-
-
-.Example:
-[source]
-----
-;; Enter sequence mode and input . with a timeout of 250
-(defalias dot-sequence (macro (sequence 250) 10 .))
-
-;; Enter sequence mode and input . with a timeout of 250 and using hidden-delay-type
-(defalias dot-sequence (macro (sequence 250 hidden-delay-type) 10 .))
-----
-
-[[input-chords]]
-=== Input chords
-<<table-of-contents,Back to ToC>>
-
-Not to be confused with <<output-chords-combos,output chords>>, `+chord+`
-actions allow you to perform various actions based on which specific combination
-of input keys are pressed together. Such an unordered combination of keys
-is called a "chord". Each chord can perform a different action, allowing you
-to bind up to `+2^n - 1+` different actions to just `+n+` keys.
-
-Input chords are configured similarly to `+defalias+` with two extra parameters
-at the beginning of each `+defchords+` group: the name of the group and a
-timeout value after which a chord triggers if it isn't triggered by a key release
-or press of a non-chord key before the timeout expires.
-
-[source]
-----
-(defsrc a b c)
-(deflayer default
-  @cha @chb @chc
-)
-
-(defalias
-  cha (chord example a)
-  chb (chord example b)
-  chc (chord example c)
-)
-
-(defchords example 500
-  (a      ) a
-  (   b   ) b
-  (a     c) C-v
-  (a  b  c) @three
-)
-----
-
-The first item of each pair specifies the keys that make up a given chord.
-The second item of each pair is the action to be executed when the given chord
-is pressed and may be any regular or advanced action, including aliases. It
-currently cannot however contain another `+chord+` action.
-
-Note that unlike with `+defseq+`, these keys do not directly correspond to real
-keys and are merely arbitrary labels that make sense within the context of the
-chord.
-They are mapped to real keys in layers by configuring the key in the layer to
-map to a `+(chord name key)+` action where `+name+` is the name of the chords
-group (above `+example+`) and `+key+` is one of these arbitrary labels.
-
-It is perfectly valid to nest these `+chord+` actions that enter "chording mode"
-within other actions like `+tap-dance+` and that will work as one would expect.
-However, this only applies to the first key used to enter "chording mode".
-Once "chording mode" is active, all other keys will be directly handled by
-"chording mode" with no regard for wrapper actions; e.g. if a key is pressed
-and it maps to a tap-hold with a chord as the hold action within, that chord
-key will immediately activate instead of the key needing to be held for the
-timeout period.
-
-**Release behaviour**
-
-For single key actions and output chords — like `lctl` or `S-tab` —
-and for `layer-while-held`,
-an input chord will release the action only when all keys that are part of
-the input chord have been released.
-In other words, if even one key is held for the input chord
-then the output action will be continued to be held,
-but only for the mentioned action categories.
-The behaviour also applies to the actions mentioned above
-when used inside of `multi` but not within any other action.
-
-An exception to the behaviour described above
-for the action categories that would normally apply
-is if a chord decomposition occurs.
-A chord decomposition occurs when you input a chord
-that does not correspond to any action.
-When this happens, kanata splits up the key presses to activate
-other actions from the components of the input chord.
-In this scenario, the behaviour described in the next paragraph will occur.
-
-For chord decompositions and all other action categories,
-the release behaviour is more confusing:
-the output action will end when any key is released during the timeout,
-or if the timeout expires, the output action ends when the *first* key
-that was pressed in the chord gets released.
-This inconsistency is a limitation of the current implementation.
-In these scenarios it is recommended
-to hold down all keys if you want to keep holding
-and to release all keys if you want to do a release.
-This is because it will probably be difficult
-to know which key was pressed first.
-
-If you want to bypass the behaviour of keys being held for chord outputs,
-you could change the chord output actions to be <<macro,macros>> instead.
-Using a macro will guarantee a rapid press+release for the output keys.
-
 [[defaliasenvcond]]
 === defaliasenvcond
 <<table-of-contents,Back to ToC>>
@@ -2479,183 +2687,6 @@ $env:VAR_NAME = "var_value"
 # bash
 VAR_NAME=var_value
 ----
-
-[[switch]]
-=== switch
-<<table-of-contents,Back to ToC>>
-
-The `switch` action accepts multiple cases.
-One case is a triple of:
-
-- keys check
-- action: to activate if keys check succeeds
-- `fallthrough|break`: choose to continue vs. stop evaluating cases
-
-The default use of keys check behaves similarly to fork.
-
-For example, the keys check `(a b c)` will activate the corresponding action
-if any of a, b, or c are currently pressed.
-
-The keys check also accepts the boolean operators `and|or|not` to allow more
-complex use cases.
-
-The order of cases matters.
-For example, if two different cases match the currently pressed keys,
-the case listed earlier in the configuration will activate first.
-If the early case uses break, the second case will not activate.
-Otherwise if fallthrough is used,
-the second case will activate sequentially after the first case.
-This idea generalizes to more than two cases,
-but the two case example is hopefully simple and effective enough.
-
-.Example:
-[source]
-----
-(defalias
-  swt (switch
-    ;; case 1
-    ((and a b (or c d) (or e f))) @ac1 break
-    ;; case 2
-    (a b c) @ac2 fallthrough
-    ;; case 3
-    () @ac3 break
-  )
-)
-----
-
-Below is a description of how this example behaves.
-
-==== Case 1
-
-----
-((and a b (or c d) (or e f))) a break
-----
-
-Translating case 1's keys check to some other common languages
-might look like:
-
-----
-(a && b && (c || d) && (e || f))
-----
-
-If the keys check passes, the action `@ac1` will activate.
-No other action will activate since `break` is used.
-
-==== Cases 2 and 3
-
-----
-(a b c) c fallthrough
-() b break
-----
-
-Case 2's key check behaves like that of `fork`, i.e.
-
-    (or a b c)
-
-or for some other common languages:
-
-    a || b || c
-
-If this keys check passes and the case 1 does not pass,
-the action `@ac2` will activate first.
-Since the keys check of case 3 always passes, `@ac3` will activate next.
-
-If neither case 1 or case 2 pass their keys checks,
-case 3 will always activate with `@ac3`.
-
-[[key-history-and-key-timing]]
-==== key-history and key-timing
-
-In addition to simple keys there are two list items
-that can be used within the case keys check
-that compare against your typed key history:
-
-* `key-history`
-* `key-timing`
-
-The `key-history` item compares the order that keys were typed.
-It accepts, in order:
-
-* a key
-* the key recency
-
-The key recency must be in the range 1-8,
-where 1 is the most recent key that was pressed
-and 8 is 8th most recent key pressed.
-
-.Example:
-[source]
-----
-(defalias
-  swh (switch
-    ((key-history a 1)) S-a break
-    ((key-history b 1)) S-b break
-    ((key-history c 1)) S-c break
-    ((key-history d 8)) (macro d d d) break
-    () XX break
-  )
-)
-----
-
-The `key-timing` compares how long ago recent key typing events occurred.
-It accepts, in order,
-
-* the key recency
-* a comparison string, which is one of: `less-than|greater-than|lt|gt`
-* number of milliseconds to compare against
-
-The key recency must be in the range 1-8,
-where 1 is the most recent key that was pressed
-and 8 is 8th most recent key pressed.
-Most use cases are expected to use a value of 1 for this parameter,
-but perhaps you can find a creative use for the other values.
-
-The comparison string determines how the actual key event timing
-will be compared to the provided timing.
-
-The number of milliseconds must be 0-65535.
-
-WARNING: The maximum milliseconds value of this configuration item
-across your whole configuration
-will be a lower bound of how long it takes for kanata to become idle
-and stop processing its state machine every approxmately 1ms.
-
-.Example:
-[source]
-----
-(defalias
-  swh (switch
-    ((key-timing 1 less-than 200)) S-a break
-    ((key-timing 1 greater-than 500)) S-b break
-    ((key-timing 2 lt 1000)) S-c break
-    ((key-timing 8 gt 2000)) (macro d d d) break
-    () XX break
-  )
-)
-----
-
-==== not
-
-The examples presented so far have not included the `not` boolean operator.
-This operator will now be discussed.
-Syntactically, the `not` operator is used similarly to `or|and`.
-Functionally, it means "not **any** of" the list elements.
-
-.Example:
-[source]
-----
-(defalias
-  swn (switch
-    ((not x y z)) S-a break
-    ;; the above and below cases are equivalent in logic
-    ((not (or x y z))) S-a break
-  )
-)
-----
-
-In potentially more familiar notation, both cases have the logic:
-
-    !(x || y || z)
 
 [[templates]]
 === Templates
