@@ -21,6 +21,7 @@ please be welcome to make a pull request or file an issue.
 
 [[table-of-contents]]
 == Table of contents
+:toclevels: 3
 toc::[]
 
 == Forcefully exit kanata [[force-exit]]
